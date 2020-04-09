@@ -1,0 +1,10 @@
+FROM alpine:3.11
+RUN apk add -U --no-cache ca-certificates
+
+WORKDIR /root
+COPY ./bin/icd /usr/bin/icd
+COPY ./bin/iccli /usr/bin/iccli
+COPY ./docker/test-entry-point.sh ./entry-point.sh
+EXPOSE 26657
+
+ENTRYPOINT [ "./entry-point.sh" ]
