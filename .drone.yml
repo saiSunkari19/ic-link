@@ -1,0 +1,37 @@
+---
+kind: pipeline
+type: docker
+name: default
+
+steps:
+  - name: build
+    image: golang:1.14.1-alpine
+    commands:
+      - ./contrib/build.sh
+  - name: publish-test
+    image: plugins/docker:18
+    settings:
+      dockerfile: docker/Dockerfile.test
+      repo: rocketprotocol/rocketzone-relayer-test
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+      tags:
+        - latest
+    when:
+      event:
+        - push
+      branch: master
+  - name: slack
+    image: plugins/slack
+    settings:
+      webhook:
+        from_secret: slack_webhook
+    when:
+      status: [success, failure]
+---
+kind: signature
+hmac: 44ab1718b196e0766acafc242ec25a808a5d23cb0ff770e25a962655d49adf82
+
+...
