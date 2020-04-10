@@ -28,7 +28,9 @@ init:
 install: go.sum
 		go install -mod=readonly $(BUILD_FLAGS) ./cmd/icd
 		go install -mod=readonly $(BUILD_FLAGS) ./cmd/iccli
-
+build:
+		go build -o bin/icd ./cmd/icd
+		go build -o bin/iccli ./cmd/iccli
 
 go.sum: go.mod
 		@echo "--> Ensure dependencies have not been modified"
@@ -40,3 +42,7 @@ lint:
 	@go mod verify
 
 
+docker-test:
+	docker build -f Dockerfile.test -t ic-link/ic-relayer:final .
+
+.PHONY: build install docker-test

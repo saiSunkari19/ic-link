@@ -14,12 +14,12 @@ if [ -z "$2" ]; then
 fi
 
 # Build genesis file incl account for passed address
-coins="100000000000ufuel,100000000000nitro"
+coins="100000000000stake,100000000000photon"
 icd init --chain-id $CHAINID $CHAINID
 iccli keys add validator --keyring-backend="test"
 icd add-genesis-account validator $coins --keyring-backend="test"
 icd add-genesis-account $GENACCT $coins --keyring-backend="test"
-icd gentx --name validator --amount 1000000ufuel --keyring-backend="test"
+icd gentx --name validator --amount 100000000stake --keyring-backend="test"
 icd collect-gentxs
 
 
