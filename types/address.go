@@ -1,10 +1,10 @@
 package types
 
 const (
-	DefaultStakeDenom = "stake"
+	DefaultStakeDenom = "fmt"
 	
 	// Bech32MainPrefix defines the Bech32 prefix of an account's address
-	Bech32MainPrefix = "interc"
+	Bech32MainPrefix = "cosmos"
 	
 	// PrefixAccount is the prefix for account keys
 	PrefixAccount = "acc"

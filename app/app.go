@@ -4,6 +4,8 @@ import (
 	"io"
 	"os"
 	
+	"github.com/cosmos/cosmos-sdk/std"
+	"github.com/cosmos/cosmos-sdk/x/capability"
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/libs/log"
 	tmos "github.com/tendermint/tendermint/libs/os"
@@ -35,6 +37,8 @@ import (
 	upgradeclient "github.com/cosmos/cosmos-sdk/x/upgrade/client"
 	
 	codecstd "github.com/cosmos/cosmos-sdk/codec/std"
+	port "github.com/cosmos/cosmos-sdk/x/ibc/05-port"
+	ibcclient "github.com/cosmos/cosmos-sdk/x/ibc/02-client"
 	transfer "github.com/cosmos/cosmos-sdk/x/ibc/20-transfer"
 )
 
@@ -50,6 +54,7 @@ var (
 		genutil.AppModuleBasic{},
 		auth.AppModuleBasic{},
 		bank.AppModuleBasic{},
+		capability.AppModuleBasic{},
 		staking.AppModuleBasic{},
 		mint.AppModuleBasic{},
 		distr.AppModuleBasic{},
@@ -89,20 +94,25 @@ type NewApp struct {
 	subspaces map[string]params.Subspace
 	
 	// keepers
-	accountKeeper  auth.AccountKeeper
-	bankKeeper     bank.Keeper
-	supplyKeeper   supply.Keeper
-	stakingKeeper  staking.Keeper
-	slashingKeeper slashing.Keeper
-	mintKeeper     mint.Keeper
-	distrKeeper    distr.Keeper
-	govKeeper      gov.Keeper
-	crisisKeeper   crisis.Keeper
-	paramsKeeper   params.Keeper
-	upgradeKeeper  upgrade.Keeper
-	evidenceKeeper evidence.Keeper
-	ibcKeeper      ibc.Keeper
-	transferKeeper transfer.Keeper
+	accountKeeper    auth.AccountKeeper
+	bankKeeper       bank.Keeper
+	capabilityKeeper *capability.Keeper
+	supplyKeeper     supply.Keeper
+	stakingKeeper    staking.Keeper
+	slashingKeeper   slashing.Keeper
+	mintKeeper       mint.Keeper
+	distrKeeper      distr.Keeper
+	govKeeper        gov.Keeper
+	crisisKeeper     crisis.Keeper
+	paramsKeeper     params.Keeper
+	upgradeKeeper    upgrade.Keeper
+	evidenceKeeper   evidence.Keeper
+	ibcKeeper        *ibc.Keeper
+	transferKeeper   transfer.Keeper
+	
+	// make scoped keepers public for test purposes
+	scopedIBCKeeper      capability.ScopedKeeper
+	scopedTransferKeeper capability.ScopedKeeper
 	
 	mm *module.Manager
 	
@@ -125,13 +135,14 @@ func NewICApp(
 	bApp.SetAppVersion(version.Version)
 	
 	keys := sdk.NewKVStoreKeys(
-		bam.MainStoreKey, auth.StoreKey, bank.StoreKey, staking.StoreKey,
+		auth.StoreKey, bank.StoreKey, staking.StoreKey,
 		supply.StoreKey, mint.StoreKey, distr.StoreKey, slashing.StoreKey,
 		gov.StoreKey, params.StoreKey, ibc.StoreKey, transfer.StoreKey,
-		evidence.StoreKey, upgrade.StoreKey,
+		evidence.StoreKey, upgrade.StoreKey, capability.StoreKey,
 	)
 	
-	tKeys := sdk.NewTransientStoreKeys(staking.TStoreKey, params.TStoreKey)
+	tKeys := sdk.NewTransientStoreKeys(params.TStoreKey)
+	memKeys := sdk.NewMemoryStoreKeys(capability.MemStoreKey)
 	
 	var app = &NewApp{
 		BaseApp:        bApp,
@@ -152,7 +163,12 @@ func NewICApp(
 	app.subspaces[slashing.ModuleName] = app.paramsKeeper.Subspace(slashing.DefaultParamspace)
 	app.subspaces[gov.ModuleName] = app.paramsKeeper.Subspace(gov.DefaultParamspace).WithKeyTable(gov.ParamKeyTable())
 	app.subspaces[crisis.ModuleName] = app.paramsKeeper.Subspace(crisis.DefaultParamspace)
-	app.subspaces[evidence.ModuleName] = app.paramsKeeper.Subspace(evidence.DefaultParamspace)
+	
+	bApp.SetParamStore(app.paramsKeeper.Subspace(bam.Paramspace).WithKeyTable(std.ConsensusParamsKeyTable()))
+	
+	app.capabilityKeeper = capability.NewKeeper(appCodec, keys[capability.StoreKey], memKeys[capability.MemStoreKey])
+	scopedIBCKeeper := app.capabilityKeeper.ScopeToModule(ibc.ModuleName)
+	scopedTransferKeeper := app.capabilityKeeper.ScopeToModule(transfer.ModuleName)
 	
 	app.accountKeeper = auth.NewAccountKeeper(
 		appCodec, keys[auth.StoreKey], app.subspaces[auth.ModuleName], auth.ProtoBaseAccount,
@@ -178,14 +194,6 @@ func NewICApp(
 	app.crisisKeeper = crisis.NewKeeper(app.subspaces[crisis.ModuleName], invCheckPeriod, app.supplyKeeper, auth.FeeCollectorName)
 	app.upgradeKeeper = upgrade.NewKeeper(map[int64]bool{}, keys[upgrade.StoreKey], appCodec, home)
 	
-	evidenceKeeper := evidence.NewKeeper(
-		appCodec, keys[evidence.StoreKey], app.subspaces[evidence.ModuleName],
-		&stakingKeeper, app.slashingKeeper,
-	)
-	evidenceRouter := evidence.NewRouter()
-	evidenceKeeper.SetRouter(evidenceRouter)
-	app.evidenceKeeper = *evidenceKeeper
-	
 	govRouter := gov.NewRouter()
 	govRouter.AddRoute(gov.RouterKey, gov.ProposalHandler).
 		AddRoute(paramsproposal.RouterKey, params.NewParamChangeProposalHandler(app.paramsKeeper)).
@@ -202,18 +210,34 @@ func NewICApp(
 			app.slashingKeeper.Hooks()),
 	)
 	
-	app.ibcKeeper = ibc.NewKeeper(app.cdc, keys[ibc.StoreKey], stakingKeeper)
+	app.ibcKeeper = ibc.NewKeeper(app.cdc, keys[ibc.StoreKey], stakingKeeper, scopedIBCKeeper)
 	
-	transferCapKey := app.ibcKeeper.PortKeeper.BindPort(bank.ModuleName)
 	app.transferKeeper = transfer.NewKeeper(
-		app.cdc, keys[transfer.StoreKey], transferCapKey,
-		app.ibcKeeper.ChannelKeeper, app.bankKeeper, app.supplyKeeper,
+		app.cdc, keys[transfer.StoreKey],
+		app.ibcKeeper.ChannelKeeper, &app.ibcKeeper.PortKeeper,
+		app.bankKeeper, app.supplyKeeper,
+		scopedTransferKeeper,
 	)
+	
+	transferModule := transfer.NewAppModule(app.transferKeeper)
+	ibcRouter := port.NewRouter()
+	ibcRouter.AddRoute(transfer.ModuleName, transferModule)
+	app.ibcKeeper.SetRouter(ibcRouter)
+	
+	evidenceKeeper := evidence.NewKeeper(
+		appCodec, keys[evidence.StoreKey], &app.stakingKeeper, app.slashingKeeper,
+	)
+	evidenceRouter := evidence.NewRouter().
+		AddRoute(ibcclient.RouterKey, ibcclient.HandlerClientMisbehaviour(app.ibcKeeper.ClientKeeper))
+	
+	evidenceKeeper.SetRouter(evidenceRouter)
+	app.evidenceKeeper = *evidenceKeeper
 	
 	app.mm = module.NewManager(
 		genutil.NewAppModule(app.accountKeeper, app.stakingKeeper, app.BaseApp.DeliverTx),
 		auth.NewAppModule(app.accountKeeper, app.supplyKeeper),
 		bank.NewAppModule(app.bankKeeper, app.accountKeeper),
+		capability.NewAppModule(*app.capabilityKeeper),
 		crisis.NewAppModule(&app.crisisKeeper),
 		supply.NewAppModule(app.supplyKeeper, app.bankKeeper, app.accountKeeper),
 		gov.NewAppModule(app.govKeeper, app.accountKeeper, app.bankKeeper, app.supplyKeeper),
@@ -224,16 +248,16 @@ func NewICApp(
 		upgrade.NewAppModule(app.upgradeKeeper),
 		evidence.NewAppModule(app.evidenceKeeper),
 		ibc.NewAppModule(app.ibcKeeper),
-		transfer.NewAppModule(app.transferKeeper),
+		transferModule,
 	)
 	
-	app.mm.SetOrderBeginBlockers(upgrade.ModuleName, mint.ModuleName, distr.ModuleName, slashing.ModuleName, staking.ModuleName)
+	app.mm.SetOrderBeginBlockers(upgrade.ModuleName, mint.ModuleName, distr.ModuleName, slashing.ModuleName, evidence.ModuleName, staking.ModuleName)
 	app.mm.SetOrderEndBlockers(crisis.ModuleName, gov.ModuleName, staking.ModuleName)
 	
 	app.mm.SetOrderInitGenesis(
 		distr.ModuleName, staking.ModuleName, auth.ModuleName, bank.ModuleName,
 		slashing.ModuleName, gov.ModuleName, mint.ModuleName, supply.ModuleName,
-		crisis.ModuleName, genutil.ModuleName, evidence.ModuleName,
+		crisis.ModuleName, genutil.ModuleName, evidence.ModuleName, transfer.ModuleName,
 	)
 	
 	app.mm.RegisterInvariants(&app.crisisKeeper)
@@ -254,23 +278,30 @@ func NewICApp(
 	app.SetBeginBlocker(app.BeginBlocker)
 	app.SetEndBlocker(app.EndBlocker)
 	
-	app.SetAnteHandler(ante.NewAnteHandler(app.accountKeeper, app.supplyKeeper, app.ibcKeeper, ante.DefaultSigVerificationGasConsumer))
+	app.SetAnteHandler(ante.NewAnteHandler(app.accountKeeper, app.supplyKeeper, *app.ibcKeeper, ante.DefaultSigVerificationGasConsumer))
 	
 	app.MountKVStores(keys)
 	app.MountTransientStores(tKeys)
+	app.MountMemoryStores(memKeys)
 	
 	if loadLatest {
-		err := app.LoadLatestVersion(app.keys[bam.MainStoreKey])
+		err := app.LoadLatestVersion()
 		if err != nil {
 			tmos.Exit(err.Error())
 		}
 	}
 	
+	ctx := app.BaseApp.NewContext(true, abci.Header{})
+	app.capabilityKeeper.InitializeAndSeal(ctx)
+	
+	app.scopedIBCKeeper = scopedIBCKeeper
+	app.scopedTransferKeeper = scopedTransferKeeper
+	
 	return app
 }
 
 func (app *NewApp) InitChainer(ctx sdk.Context, req abci.RequestInitChain) abci.ResponseInitChain {
-	var genesisState simapp.GenesisState
+	var genesisState GenesisState
 	app.cdc.MustUnmarshalJSON(req.AppStateBytes, &genesisState)
 	
 	res := app.mm.InitGenesis(ctx, app.cdc, genesisState)
@@ -291,7 +322,7 @@ func (app *NewApp) EndBlocker(ctx sdk.Context, req abci.RequestEndBlock) abci.Re
 }
 
 func (app *NewApp) LoadHeight(height int64) error {
-	return app.LoadVersion(height, app.keys[bam.MainStoreKey])
+	return app.LoadVersion(height)
 }
 
 func (app *NewApp) ModuleAccountAddrs() map[string]bool {
