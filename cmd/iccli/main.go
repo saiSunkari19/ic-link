@@ -25,8 +25,8 @@ import (
 	"github.com/tendermint/go-amino"
 	"github.com/tendermint/tendermint/libs/cli"
 	
-	"github.com/saiSunkari19/ic-link/app"
-	internal "github.com/saiSunkari19/ic-link/types"
+	"github.com/saisunkari19/ic-link/app"
+	internal "github.com/saisunkari19/ic-link/types"
 )
 
 var (

@@ -13,8 +13,8 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 	dbm "github.com/tendermint/tm-db"
 	
-	"github.com/saiSunkari19/ic-link/app"
-	internal "github.com/saiSunkari19/ic-link/types"
+	"github.com/saisunkari19/ic-link/app"
+	internal "github.com/saisunkari19/ic-link/types"
 	
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client/debug"

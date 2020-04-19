@@ -33,7 +33,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/genutil"
 	"github.com/cosmos/cosmos-sdk/x/staking"
 	
-	internal "github.com/saiSunkari19/ic-link/types"
+	internal "github.com/saisunkari19/ic-link/types"
 )
 
 var (

@@ -1,10 +1,10 @@
-module github.com/saiSunkari19/ic-link
+module github.com/saisunkari19/ic-link
 
 go 1.13
 
 require (
 	github.com/btcsuite/btcd v0.0.0-20190807005414-4063feeff79a // indirect
-	github.com/cosmos/cosmos-sdk v0.34.4-0.20200417201027-11528d39594c
+	github.com/cosmos/cosmos-sdk v0.34.4-0.20200417201027-11528d39594c //indirect
 	github.com/onsi/ginkgo v1.8.0 // indirect
 	github.com/onsi/gomega v1.5.0 // indirect
 	github.com/pkg/errors v0.9.1
@@ -17,6 +17,3 @@ require (
 	github.com/tendermint/tm-db v0.5.1
 	golang.org/x/net v0.0.0-20190827160401-ba9fcec4b297 // indirect
 )
-
-//  replace github.com/tendermint/tendermint => ../../../github.com/tendermint/tendermint
-// replace github.com/cosmos/cosmos-sdk => ../../../github.com/cosmos/cosmos-sdk

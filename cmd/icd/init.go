@@ -19,8 +19,8 @@ import (
 	"github.com/tendermint/tendermint/libs/cli"
 	"github.com/tendermint/tendermint/types"
 	
-	"github.com/saiSunkari19/ic-link/app"
-	appTypes "github.com/saiSunkari19/ic-link/types"
+	"github.com/saisunkari19/ic-link/app"
+	appTypes "github.com/saisunkari19/ic-link/types"
 )
 
 const (
