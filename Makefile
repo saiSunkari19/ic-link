@@ -47,6 +47,7 @@ lint:
 
 docker-test:
 	@docker build -f Dockerfile.test -t ${TEST_DOCKER_REPO}:$(shell git rev-parse --short HEAD) .
-	@docker push ${TEST_DOCKER_REPO}:$(shell git rev-parse --short HEAD)
+	@docker tag ${TEST_DOCKER_REPO}:$(shell git rev-parse --short HEAD) ${TEST_DOCKER_REPO}:$(shell git rev-parse --abbrev-ref HEAD | sed 's#/#_#g')
+	@docker push ${TEST_DOCKER_REPO}:$(shell git rev-parse --abbrev-ref HEAD | sed 's#/#_#g')
 
 .PHONY: build install docker-test
