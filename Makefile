@@ -29,7 +29,7 @@ init:
 	icd collect-gentxs
 
 install: go.sum
-		go install  -mod=readonly $(BUILD_FLAGS) ./cmd/icd
+		go install -mod=readonly $(BUILD_FLAGS) ./cmd/icd
 		go install -mod=readonly $(BUILD_FLAGS) ./cmd/iccli
 build:
 		go build -o bin/icd ./cmd/icd

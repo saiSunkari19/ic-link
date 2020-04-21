@@ -37,8 +37,8 @@ import (
 	upgradeclient "github.com/cosmos/cosmos-sdk/x/upgrade/client"
 	
 	codecstd "github.com/cosmos/cosmos-sdk/codec/std"
-	port "github.com/cosmos/cosmos-sdk/x/ibc/05-port"
 	ibcclient "github.com/cosmos/cosmos-sdk/x/ibc/02-client"
+	port "github.com/cosmos/cosmos-sdk/x/ibc/05-port"
 	transfer "github.com/cosmos/cosmos-sdk/x/ibc/20-transfer"
 )
 
